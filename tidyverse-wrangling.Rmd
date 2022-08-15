@@ -58,6 +58,7 @@ wb_clean <- wb_indicators_long |>
 ```
 
 To see all of the unique values that exist in a series:
+
 ```{r}
 unique(wb_clean$`Series Name`)
 ```
@@ -85,6 +86,7 @@ ggplot(data = wb_subset, aes(x = year, y = co2_emissions_kt)) +
   
 
 ```
+
 For example, if we wanted to get rid of some of the country class variables that are larger region groupings, etc., then use:
 
 ```{r}
@@ -94,13 +96,257 @@ wb_example <- wb_subset |>
 #this gets rid of c
 ```
 
+## More data wrangling with filter
+
+```{r}
+ex_1 <- starwars |> 
+  filter(height > 180)
+```
+
+```{r}
+ex_2 <- starwars |> 
+  filter(eye_color == "blue")
+#check it:
+unique(ex_2$eye_color)
+
+```
+
+```{r}
+
+ex_3 <- starwars |> 
+  filter(homeworld == "Naboo")
+
+```
+
+Now try filtering with multiple conditions:
+
+```{r}
+ex_4 <- starwars |> 
+  filter(height > 180 & homeworld == "Tatooine")
+
+```
+
+```{r}
+ex_5 <- starwars |> 
+  filter(hair_color == "brown" & species == "Human")
+```
+
+## Filtering `or` `|` statements
+
+```{r}
+ex_6 <- starwars |> 
+  filter(height > 180 | eye_color == "yellow")
+```
+
+create a subset that keeps rows if homeworld is Endor or species droid
+
+```{r}
+ex_7 <- starwars |> 
+  filter(homeworld == "Endor" | species == "Droid")
+
+```
+
+ANother way to write an or statement referring to a single variable's values:
+
+Ex. keeping any observations where eye color is blue or red or brown; instead of writing out each of the matches we are looking for with multiple or statements, use %in%
+
+```{r}
+ex_8 <- starwars |>
+  filter(eye_color %in% c("blue", "brown", "red"))
+
+#the in operator looks at each row and looks for any match within the vector, blue, or brown, or red
+
+# the == is only for looking for a single exact match, NOT a vector.... otherwise:
+
+#DON'T DO THIS!!::
+ex_BAD <- starwars |> 
+  filter(eye_color == c("blue", "brown", "red"))
+#this is looking for this specific order, so row 1 looks for match to blue, row 2 looks for match to brown, row 3 looks for match to red, row 4 to blue, etc. etc.
+  
+```
+
+```{r}
+
+ex_11 <- starwars |> 
+  filter(homeworld %in% c("Endor", "Tatooine", "Naboo") 
+         & height < 150)
 
 
+```
+
+Using a negate filter
+
+```{r}
+ex_12 <- starwars |> 
+  filter(species != "Human")
+
+ex_13 <- starwars |> 
+  filter(!species %in% c("Human", "Ewok", "Wookiee"))
+
+```
+
+## `select()` to select or exclude columns
+
+Some examples using the cleaned worldbank dataset
+
+```{r}
+#select by name
+
+ex_14 <- wb_clean |> 
+  select(country, year, co2_emissions_kt)
+
+#or refer to a range of values - select is a risky function to use becasue there is no relationship order to the columns, purely positional so can be changed. But can be useful to view a simplified dataset
+
+ex_15 <- wb_clean |> 
+  select(year:fossil_fuel_cons_pct)
+
+#exclude variables in a range
+
+ex_16 <- wb_clean |> 
+  select(year:fossil_fuel_cons_pct, -access_electricity_pp)
+
+#now pipe some things together
+
+ex_17 <- wb_clean |> 
+  filter(country %in% c("Bolivia", "Chile", "Mexico")) |> 
+  select(country:fossil_fuel_cons_pct)
+
+```
+
+```{r}
+#can also use select to rename and/or move things - below columns are re-ordered and renamed
+
+ex_18 <- wb_clean |> 
+  select(year_new = year,
+         emissions = co2_emissions_kt,
+         country_name = country)
+```
+
+```{r}
+ex_19 <- wb_clean |> 
+  select(year, country, water_stress) |> 
+  filter(country %in% c("Albania", "Croatia", "Ecuador")) |> 
+  drop_na()
+
+#check to see if it worked
+
+unique(ex_19$country)
+
+head(ex_19$country)
+
+```
+
+Another way to rename columns with `rename()`
+
+```{r}
+
+ex_20 <- wb_clean |> 
+  rename(ffcp = fossil_fuel_cons_pct,
+         ws = water_stress)
+
+#select makes you put in every column even the ones you don't want to rename, so using rename allows you to just call out the ones you do want to rename, and leaving the rest
+
+ex_21 <- wb_clean |> 
+  rename(place = country,
+         electricity_access = access_electricity_pp)
 
 
+```
+
+## `mutate()` to update an existing column or add a new one
+
+If you assign a NEW column name it will add a new column to the end of your data frame. If you assign an existing column name, it will overwrite that column.
+
+Both can be useful depending on what you want to do.
+
+**Adding a new column:** Example: converting units of CO2 emissions from kt to tons - 100 ktons / 1 ton
+
+```{r}
+#create a new column
+ex_22 <- wb_clean |> 
+  mutate(co2_emissions_t = co2_emissions_kt*1000) |> 
+  relocate(co2_emissions_t, .after = co2_emissions_kt)
+
+#make another new column with new values - this will help build to using casewhen()
+
+ex_23 <- wb_clean |> 
+  mutate(yay = "YAY NEW COLUMN")
+
+#can also use to recast variables as new classes
+
+ex_24 <- wb_clean |> 
+  mutate(year = as.character(year))
+
+ex_25 <- ex_24 |> 
+  mutate(year = as.numeric(year))
+
+#dplyr::relocate() to move order of columns - this doesn't really have an anlytical function, but can just visually make things feel better
+
+ex_26 <- wb_clean |> 
+  relocate(water_stress, .after = year)
 
 
+```
+
+## `group_by() |> summarize()`
+
+This combo creates groups in dataset based on variables you specify - so then anything done after is applied to those groups. `summarize()` applies functions to EACH GROUP and returns them in a summary table.
+
+If you run just group_by() you won't *see* anything, but then when you pipe to a next step or apply another function it will be applied by group
+
+```{r}
+ex_27 <- starwars |> 
+  group_by(species) |> 
+  summarize(mean_height = mean(height, na.rm = TRUE),
+            mean_mass = mean(mass, na.rm = TRUE))
 
 
+```
 
+```{r}
+#create a case table to make this tidy
+
+df <- tribble(
+~species, ~length, ~number,
+"lobster", 12, 4,
+"lobster", 14, 6,
+"lobster", 15, 2
+)
+
+df_case <- df |> 
+  uncount(number)
+```
+ `uncount()` creates table that has a single row for each observation from a frequency or count table
+
+`count()` does the opposite - counts observations and is a combination function of group_by, summarize, n() - so jut feed n() as the argument
+
+For example:
+```{r}
+starwars |> count(homeworld)
+
+#can give multiple conditions
+
+starwars |> count(homeworld, species)
+
+starwars |> count(species, homeworld)
+
+```
+
+Another practice example: 
+
+```{r}
+
+ex_28 <- wb_clean |> 
+  filter(country %in% c("Nicaragua", "Ecuador", "Peru", "Chile"),
+         year > 2005) |> 
+  select(country, year, co2_emissions_kt) |>
+  mutate(co2_emissions_Mt = co2_emissions_kt / 1000)
+
+total_emissions <- ex_28 |> 
+  group_by(country) |> 
+  summarize(total_co2_Mt = sum(co2_emissions_Mt, na.rm = TRUE))
+
+```
+
+Remember to check intermediates - max, min, names, unique, etc. in the console
 
